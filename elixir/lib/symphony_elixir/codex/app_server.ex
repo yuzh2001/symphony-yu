@@ -944,9 +944,27 @@ defmodule SymphonyElixir.Codex.AppServer do
   defp tool_call_arguments(_params), do: %{}
 
   defp send_message(port, message) do
-    line = Jason.encode!(message) <> "\n"
+    line = message |> sanitize_json_value() |> Jason.encode!() |> Kernel.<>("\n")
     Port.command(port, line)
   end
+
+  defp sanitize_json_value(value) when is_binary(value) do
+    if String.valid?(value) do
+      value
+    else
+      String.replace_invalid(value, "?")
+    end
+  end
+
+  defp sanitize_json_value(value) when is_list(value), do: Enum.map(value, &sanitize_json_value/1)
+
+  defp sanitize_json_value(value) when is_map(value) do
+    Map.new(value, fn {key, nested_value} ->
+      {sanitize_json_value(key), sanitize_json_value(nested_value)}
+    end)
+  end
+
+  defp sanitize_json_value(value), do: value
 
   defp needs_input?(method, payload)
        when is_binary(method) and is_map(payload) do
